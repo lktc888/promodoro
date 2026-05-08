@@ -26,9 +26,11 @@ function updateDisplay() {
   if (currentMode === 'focus') {
     modeLabel.textContent = '专注';
     modeLabel.classList.remove('rest');
+    switchModeBtn.textContent = '切换到休息';
   } else {
     modeLabel.textContent = '休息';
     modeLabel.classList.add('rest');
+    switchModeBtn.textContent = '切换到专注';
   }
 
   sessionCount.textContent = `第 ${sessionNumber} 个番茄`;
@@ -46,14 +48,19 @@ function startTimer() {
   if (state === 'running') {
     state = 'paused';
     clearInterval(timerInterval);
+    timerInterval = null;
   } else {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+    }
     state = 'running';
     timerInterval = setInterval(() => {
       timeLeft--;
       updateDisplay();
 
-      if (timeLeft <= 0) {
+      if (timeLeft === 0) {
         clearInterval(timerInterval);
+        timerInterval = null;
         onTimerComplete();
       }
     }, 1000);
@@ -62,25 +69,29 @@ function startTimer() {
 }
 
 function resetTimer() {
-  clearInterval(timerInterval);
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
   state = 'idle';
   timeLeft = currentMode === 'focus' ? FOCUS_TIME : BREAK_TIME;
   updateDisplay();
 }
 
 function switchMode() {
-  clearInterval(timerInterval);
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
   state = 'idle';
 
   if (currentMode === 'focus') {
     currentMode = 'break';
     timeLeft = BREAK_TIME;
-    switchModeBtn.textContent = '切换到专注';
   } else {
     currentMode = 'focus';
     timeLeft = FOCUS_TIME;
     sessionNumber++;
-    switchModeBtn.textContent = '切换到休息';
   }
 
   updateDisplay();
@@ -94,34 +105,41 @@ function onTimerComplete() {
     showNotification('番茄钟', '专注时间结束！休息一下吧');
     currentMode = 'break';
     timeLeft = BREAK_TIME;
-    switchModeBtn.textContent = '切换到专注';
   } else {
     showNotification('番茄钟', '休息结束！继续专注');
     currentMode = 'focus';
     timeLeft = FOCUS_TIME;
     sessionNumber++;
-    switchModeBtn.textContent = '切换到休息';
   }
 
   updateDisplay();
 }
 
+let audioContext = null;
+
+function getAudioContext() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioContext;
+}
+
 function playSound() {
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
+  const ctx = getAudioContext();
+  const oscillator = ctx.createOscillator();
+  const gainNode = ctx.createGain();
 
   oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
+  gainNode.connect(ctx.destination);
 
   oscillator.frequency.value = 800;
   oscillator.type = 'sine';
 
-  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+  gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
 
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + 1);
+  oscillator.start(ctx.currentTime);
+  oscillator.stop(ctx.currentTime + 1);
 }
 
 function showNotification(title, body) {

@@ -3,6 +3,7 @@ const path = require('path');
 
 let mainWindow = null;
 let tray = null;
+const notificationsSupported = Notification.isSupported();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -30,6 +31,18 @@ function createWindow() {
   });
 }
 
+function createFallbackIcon() {
+  const size = 16;
+  const canvas = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    canvas[i * 4] = 255;
+    canvas[i * 4 + 1] = 107;
+    canvas[i * 4 + 2] = 107;
+    canvas[i * 4 + 3] = 255;
+  }
+  return nativeImage.createFromBuffer(canvas, { width: size, height: size });
+}
+
 function createTray() {
   const iconPath = path.join(__dirname, 'icon.png');
   let trayIcon;
@@ -37,26 +50,10 @@ function createTray() {
   try {
     trayIcon = nativeImage.createFromPath(iconPath);
     if (trayIcon.isEmpty()) {
-      const size = 16;
-      const canvas = Buffer.alloc(size * size * 4);
-      for (let i = 0; i < size * size; i++) {
-        canvas[i * 4] = 255;
-        canvas[i * 4 + 1] = 107;
-        canvas[i * 4 + 2] = 107;
-        canvas[i * 4 + 3] = 255;
-      }
-      trayIcon = nativeImage.createFromBuffer(canvas, { width: size, height: size });
+      trayIcon = createFallbackIcon();
     }
   } catch (e) {
-    const size = 16;
-    const canvas = Buffer.alloc(size * size * 4);
-    for (let i = 0; i < size * size; i++) {
-      canvas[i * 4] = 255;
-      canvas[i * 4 + 1] = 107;
-      canvas[i * 4 + 2] = 107;
-      canvas[i * 4 + 3] = 255;
-    }
-    trayIcon = nativeImage.createFromBuffer(canvas, { width: size, height: size });
+    trayIcon = createFallbackIcon();
   }
 
   tray = new Tray(trayIcon);
@@ -92,17 +89,19 @@ function createTray() {
   });
 }
 
+function toggleWindow() {
+  if (mainWindow.isVisible()) {
+    mainWindow.hide();
+  } else {
+    mainWindow.show();
+  }
+}
+
 app.whenReady().then(() => {
   createWindow();
   createTray();
 
-  globalShortcut.register('CommandOrControl+Shift+P', () => {
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-    }
-  });
+  globalShortcut.register('CommandOrControl+Shift+P', toggleWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -111,16 +110,10 @@ app.whenReady().then(() => {
   });
 });
 
-ipcMain.on('tray-toggle', () => {
-  if (mainWindow.isVisible()) {
-    mainWindow.hide();
-  } else {
-    mainWindow.show();
-  }
-});
+ipcMain.on('tray-toggle', toggleWindow);
 
 ipcMain.on('show-notification', (event, { title, body }) => {
-  if (Notification.isSupported()) {
+  if (notificationsSupported) {
     new Notification({ title, body }).show();
   }
 });
